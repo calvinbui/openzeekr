@@ -16,5 +16,5 @@
     <string name="notification_channel_news">News &amp; offers</string>
     <string name="notification_channel_news_description">Zeekr news, events and promotional messages</string>
     <string name="notification_channel_other">Car alerts (uncategorised)</string>
-    <string name="notification_channel_other_description">Includes security alarms delivered in the background and other car alerts without a recognised category</string>
+    <string name="notification_channel_other_description">May include security alarms delivered in the background and other car alerts without a recognised category</string>
 </resources>

@@ -21,6 +21,7 @@ object CarNotifier {
     /** Intent extra carrying a message-centre deep link (push `url`, e.g. zeekr-overseas://…). */
     const val EXTRA_DEEP_LINK = "com.openzeekr.app.extra.DEEP_LINK"
 
+    // Labels refresh once per process; revisit this cache if translations are added.
     private var channelsRegistered = false
 
     @Synchronized
