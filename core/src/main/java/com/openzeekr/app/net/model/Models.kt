@@ -655,6 +655,8 @@ data class InboxMessage(
     val imageUrl: String?,
     val timeMs: Long?,
     val read: Boolean,
+    /** Descriptive types, kept separately because category can be an opaque customTypeId. */
+    val categoryHints: List<String> = emptyList(),
 )
 
 object Inbox {
@@ -672,42 +674,51 @@ object Inbox {
      */
     fun parseHome(data: JsonElement?): List<InboxMessage> {
         val out = LinkedHashMap<String, InboxMessage>()
-        fun walk(node: JsonElement?) {
+        fun walk(node: JsonElement?, inheritedHints: List<String>) {
             when (node) {
-                is JsonArray -> node.forEach(::walk)
+                is JsonArray -> node.forEach { walk(it, inheritedHints) }
                 is JsonObject -> {
+                    val hints = (categoryHints(node) + inheritedHints).distinct()
                     val hasId = node["id"] is JsonPrimitive
                     val looksLikeMsg = hasId && (node["title"] is JsonPrimitive || node["detail"] is JsonPrimitive)
                     if (looksLikeMsg) {
-                        val m = message(node)
+                        val m = message(node).copy(categoryHints = hints)
                         (m.id ?: "${m.title}:${m.timeMs}").let { key -> out.putIfAbsent(key, m) }
                     }
-                    node.values.forEach(::walk) // still descend (a group object also holds noticeDTO)
+                    node.values.forEach { walk(it, hints) } // a group object also holds noticeDTO
                 }
                 else -> {}
             }
         }
-        walk(data)
+        walk(data, emptyList())
         return out.values.sortedByDescending { it.timeMs ?: 0L }
     }
 
-    /** Distinct category ids (`customTypeId`) found in the `/home` groups. The paged `/inbox` list
-     *  is filtered by one of these — one per group (VEHICLE/OTA/AFTER_SALES/ZEEKR). */
-    fun homeCategories(data: JsonElement?): List<String> {
-        val ids = LinkedHashSet<String>()
-        fun walk(n: JsonElement?) {
+    /** Category ids (`customTypeId`) and their descriptive hints from `/home`. Retain the group
+     *  context when fetching each paged `/inbox` list: individual messages may only carry an id. */
+    fun homeCategories(data: JsonElement?): Map<String, List<String>> {
+        val categories = LinkedHashMap<String, List<String>>()
+        fun walk(n: JsonElement?, inheritedHints: List<String>) {
             when (n) {
-                is JsonArray -> n.forEach(::walk)
+                is JsonArray -> n.forEach { walk(it, inheritedHints) }
                 is JsonObject -> {
+                    // Only propagate known GROUP types to the paged query. A latest-message preview
+                    // can carry a subtype (e.g. charging) that doesn't apply to the rest of its group.
+                    val groupHints = categoryHints(n).filter {
+                        it.uppercase(java.util.Locale.ROOT) in setOf("VEHICLE", "OTA", "AFTER_SALES", "ZEEKR")
+                    }
+                    val hints = (groupHints + inheritedHints).distinct()
                     (n["customTypeId"] as? JsonPrimitive)?.contentOrNull
-                        ?.takeIf { it.isNotBlank() && it != "null" }?.let { ids += it }
-                    n.values.forEach(::walk)
+                        ?.takeIf { it.isNotBlank() && it != "null" }?.let { id ->
+                            categories.putIfAbsent(id, hints)
+                        }
+                    n.values.forEach { walk(it, hints) }
                 }
                 else -> {}
             }
         }
-        walk(data)
-        return ids.toList()
+        walk(data, emptyList())
+        return categories
     }
 
     /**
@@ -756,8 +767,14 @@ object Inbox {
             imageUrl = s("attachment", "imageUrl", "image", "iconUrl", "picUrl"),
             timeMs = ts?.let { it.toLongOrNull() ?: parseIso(it) },
             read = readFlag,
+            categoryHints = categoryHints(o),
         )
     }
+
+    private fun categoryHints(o: JsonObject): List<String> =
+        listOf("bizType", "category", "type", "groupType").mapNotNull { key ->
+            (o[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        }
 
     /** Find the message array wherever it lives in the response wrapper. */
     private fun listNode(data: JsonElement?): List<JsonElement> = when (data) {
