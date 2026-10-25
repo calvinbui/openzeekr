@@ -46,4 +46,24 @@ class InboxNotificationMetadataTest {
         assertEquals(mapOf("102" to listOf("VEHICLE")), Inbox.homeCategories(preview))
         assertEquals(CarNotificationCategory.CHARGING, CarNotificationCategory.forMessage(Inbox.parseHome(preview).single()))
     }
+
+    @Test
+    fun wrapperSubtypesAreNotInheritedButMessagesKeepTheirOwnSubtypes() {
+        val wrapped = Json.parseToJsonElement(
+            """{"type":"charging","groups":[
+                {"groupType":"VEHICLE","customTypeId":"102","messages":[
+                    {"id":"unknown","title":"Operation completed"},
+                    {"id":"charge","title":"Operation completed","bizType":"chargeComplete"}
+                ]}
+            ]}""",
+        )
+        val messages = Inbox.parseHome(wrapped).associateBy { it.id }
+        val unknown = messages.getValue("unknown")
+        val charge = messages.getValue("charge")
+        assertEquals(listOf("VEHICLE"), unknown.categoryHints)
+        assertEquals(CarNotificationCategory.OTHER, CarNotificationCategory.forMessage(unknown))
+        assertEquals(listOf("chargeComplete", "VEHICLE"), charge.categoryHints)
+        assertEquals(CarNotificationCategory.CHARGING, CarNotificationCategory.forMessage(charge))
+        assertEquals(mapOf("102" to listOf("VEHICLE")), Inbox.homeCategories(wrapped))
+    }
 }

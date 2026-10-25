@@ -95,6 +95,7 @@ class ZeekrFcmService : FirebaseMessagingService() {
                 imageUrl = null,
                 timeMs = message.sentTime.takeIf { it > 0 } ?: System.currentTimeMillis(),
                 read = false,
+                // Read named metadata fields from the query; never classify arbitrary URL text.
                 categoryHints = listOf("bizType", "category", "type", "groupType").flatMap { key ->
                     listOfNotNull(data[key], q[key]).filter { it.isNotBlank() }
                 },

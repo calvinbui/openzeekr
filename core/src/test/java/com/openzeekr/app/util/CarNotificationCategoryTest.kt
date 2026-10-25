@@ -76,21 +76,19 @@ class CarNotificationCategoryTest {
 
     @Test
     fun chargingStatusRemindersCoverStartStopAndTheReportedTitleTypo() {
-        for (status in listOf("Charging started", "Charging stopped")) {
-            assertEquals(CarNotificationCategory.CHARGING, category(status))
-            for (title in listOf("Charging status reminder", "Chaging status reminder")) {
-                assertEquals(
-                    "$title: $status",
-                    CarNotificationCategory.CHARGING,
-                    category(title, category = "12345", hints = listOf("VEHICLE"), body = status),
-                )
-            }
+        for (title in listOf(
+            "Charging started", "Charging stopped", "Charging status reminder",
+            "Chaging started", "Chaging stopped", "Chaging status reminder",
+        )) {
+            assertEquals(title, CarNotificationCategory.CHARGING, category(title, category = "12345", hints = listOf("VEHICLE")))
         }
     }
 
     @Test
     fun keywordsMustBeWholeWordsAndAmbiguousTitlesStayOther() {
-        for (title in listOf("Subtotal", "Total distance", "Social event", "Alarm", "Parking", "Service available", "Security advice")) {
+        for (title in listOf(
+            "Subtotal", "Total distance", "Social event", "Alarm", "Parking", "Service available", "Security advice", "Chargeback processed",
+        )) {
             assertEquals(title, CarNotificationCategory.OTHER, category(title))
         }
     }
@@ -101,6 +99,7 @@ class CarNotificationCategoryTest {
             CarNotificationCategory.OTHER,
             category("Message", body = "Theft alarm and charging tips", url = "https://example.com/ota?title=charging"),
         )
+        assertEquals(CarNotificationCategory.OTHER, category("Message", body = "Chaging started"))
     }
 
     @Test

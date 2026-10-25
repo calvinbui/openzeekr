@@ -21,21 +21,15 @@ object CarNotifier {
     /** Intent extra carrying a message-centre deep link (push `url`, e.g. zeekr-overseas://…). */
     const val EXTRA_DEEP_LINK = "com.openzeekr.app.extra.DEEP_LINK"
 
+    private var channelsRegistered = false
+
+    @Synchronized
     fun ensureChannels(ctx: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (channelsRegistered || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
         val legacy = mgr.getNotificationChannel(CarNotificationCategory.OTHER.channelId)
         for (category in CarNotificationCategory.entries) {
-            val (nameRes, descriptionRes) = when (category) {
-                CarNotificationCategory.CHARGING -> R.string.notification_channel_charging to R.string.notification_channel_charging_description
-                CarNotificationCategory.SECURITY -> R.string.notification_channel_security to R.string.notification_channel_security_description
-                CarNotificationCategory.VEHICLE -> R.string.notification_channel_vehicle to R.string.notification_channel_vehicle_description
-                CarNotificationCategory.UPDATES -> R.string.notification_channel_updates to R.string.notification_channel_updates_description
-                CarNotificationCategory.SERVICE -> R.string.notification_channel_service to R.string.notification_channel_service_description
-                CarNotificationCategory.NEWS -> R.string.notification_channel_news to R.string.notification_channel_news_description
-                CarNotificationCategory.OTHER -> R.string.notification_channel_other to R.string.notification_channel_other_description
-            }
-            val name = ctx.getString(nameRes)
+            val name = ctx.getString(category.nameRes)
             val channel = mgr.getNotificationChannel(category.channelId)
                 ?: NotificationChannel(category.channelId, name, legacy?.importance ?: NotificationManager.IMPORTANCE_HIGH).apply {
                     // Seed NEW categories from the old channel: splitting must not unmute alerts or
@@ -51,9 +45,11 @@ object CarNotifier {
                     }
                 }
             channel.name = name
-            channel.description = ctx.getString(descriptionRes)
+            channel.description = ctx.getString(category.descriptionRes)
             mgr.createNotificationChannel(channel)
         }
+        // Only cache successful registration. Notification bursts need no more channel IPC calls.
+        channelsRegistered = true
     }
 
     /** Post one car message. No-ops (via runCatching) if POST_NOTIFICATIONS isn't granted. */

@@ -660,6 +660,8 @@ data class InboxMessage(
 )
 
 object Inbox {
+    private val groupTypes = setOf("VEHICLE", "OTA", "AFTER_SALES", "ZEEKR")
+
     /** Tolerant parse of the (shape-varying) inbox `data` into a message list. */
     fun parse(data: JsonElement?): List<InboxMessage> =
         listNode(data).mapNotNull { (it as? JsonObject)?.let(::message) }
@@ -678,13 +680,15 @@ object Inbox {
             when (node) {
                 is JsonArray -> node.forEach { walk(it, inheritedHints) }
                 is JsonObject -> {
-                    val hints = (categoryHints(node) + inheritedHints).distinct()
+                    val ownHints = categoryHints(node)
                     val hasId = node["id"] is JsonPrimitive
                     val looksLikeMsg = hasId && (node["title"] is JsonPrimitive || node["detail"] is JsonPrimitive)
                     if (looksLikeMsg) {
-                        val m = message(node).copy(categoryHints = hints)
+                        val m = message(node).copy(categoryHints = (ownHints + inheritedHints).distinct())
                         (m.id ?: "${m.title}:${m.timeMs}").let { key -> out.putIfAbsent(key, m) }
                     }
+                    // Subtypes describe this message only; descendants inherit known group types.
+                    val hints = (groupHints(ownHints) + inheritedHints).distinct()
                     node.values.forEach { walk(it, hints) } // a group object also holds noticeDTO
                 }
                 else -> {}
@@ -704,10 +708,7 @@ object Inbox {
                 is JsonObject -> {
                     // Only propagate known GROUP types to the paged query. A latest-message preview
                     // can carry a subtype (e.g. charging) that doesn't apply to the rest of its group.
-                    val groupHints = categoryHints(n).filter {
-                        it.uppercase(java.util.Locale.ROOT) in setOf("VEHICLE", "OTA", "AFTER_SALES", "ZEEKR")
-                    }
-                    val hints = (groupHints + inheritedHints).distinct()
+                    val hints = (groupHints(categoryHints(n)) + inheritedHints).distinct()
                     (n["customTypeId"] as? JsonPrimitive)?.contentOrNull
                         ?.takeIf { it.isNotBlank() && it != "null" }?.let { id ->
                             categories.putIfAbsent(id, hints)
@@ -775,6 +776,9 @@ object Inbox {
         listOf("bizType", "category", "type", "groupType").mapNotNull { key ->
             (o[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
         }
+
+    private fun groupHints(hints: List<String>): List<String> =
+        hints.filter { it.uppercase(java.util.Locale.ROOT) in groupTypes }
 
     /** Find the message array wherever it lives in the response wrapper. */
     private fun listNode(data: JsonElement?): List<JsonElement> = when (data) {
